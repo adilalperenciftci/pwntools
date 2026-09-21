@@ -13,9 +13,9 @@ from pwnlib import shellcraft
 from pwnlib.asm import asm
 from pwnlib.context import context
 from pwnlib.encoders.encoder import Encoder
+from pwnlib.exception import PwnlibException
 from pwnlib.util.fiddling import xor_pair
 from pwnlib.util.lists import group
-
 
 # Note shellcode assumes it's based at ecx
 
@@ -66,7 +66,10 @@ end:
         while len(raw_bytes) % context.bytes:
             raw_bytes += b'\x00'
 
-        a, b = xor_pair(raw_bytes, avoid)
+        pair = xor_pair(raw_bytes, avoid)
+        if pair is None:
+            raise PwnlibException('Could not find XOR pair')
+        a, b = pair
 
         mov_ecx = shellcraft.i386.mov('ecx', len(raw_bytes) // context.bytes)
         decoder = self.decoder % mov_ecx

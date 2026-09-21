@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import random
 import re
 import string
@@ -6,6 +7,7 @@ from collections import defaultdict
 
 from pwnlib.context import LocalContext
 from pwnlib.context import context
+from pwnlib.exception import PwnlibException
 from pwnlib.log import getLogger
 from pwnlib.util.fiddling import hexdump
 
@@ -61,12 +63,12 @@ def encode(raw_bytes, avoid=None, expr=None, force=0, pcreg=''):
     """
     orig_avoid = avoid
 
-    avoid = set(avoid or '')
+    avoid = set(avoid or b'')
 
     if expr:
         for char in all_chars:
             if re.search(expr, char):
-                avoid.add(char)
+                avoid.add(ord(char))
 
     if not (force or avoid & set(raw_bytes)):
         return raw_bytes
@@ -75,12 +77,12 @@ def encode(raw_bytes, avoid=None, expr=None, force=0, pcreg=''):
     random.shuffle(encoders)
 
     for encoder in encoders:
-        if encoder.blacklist & avoid:
+        if encoder.blacklist & set(map(chr, avoid)):
             continue
 
         try:
             v = encoder(raw_bytes, bytes(avoid), pcreg)
-        except NotImplementedError:
+        except (NotImplementedError, PwnlibException):
             continue
 
         if avoid & set(v):

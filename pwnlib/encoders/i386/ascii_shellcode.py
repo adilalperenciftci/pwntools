@@ -23,6 +23,8 @@ class AsciiShellcodeEncoder(Encoder):
     https://vincentdary.github.io/blog-posts/polyasciishellgen-caezar-ascii-shellcode-generator/index.html#22-mechanism
     """
 
+    arch = 'i386'
+
     def __init__(self, slop=20, max_subs=4):
         """ Init
 
@@ -86,6 +88,8 @@ class AsciiShellcodeEncoder(Encoder):
         if not avoid:
             vocab = bytes(range(0x21, 0x7f))
         else:
+            if isinstance(avoid, bytes):
+                avoid = set(map(chr, avoid))
             required_chars = set(r'\-%TXP')
             allowed = set(all_chars)
             if avoid.intersection(required_chars):
