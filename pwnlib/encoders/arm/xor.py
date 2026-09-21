@@ -20,6 +20,10 @@ class ArmXorEncoder(Encoder):
     >>> p.sendline(b'echo hello; exit')
     >>> p.recvline()
     b'hello\n'
+    >>> encoders.arm.xor.encode(b'ABCD', bytes(range(256)))
+    Traceback (most recent call last):
+      ...
+    pwnlib.exception.PwnlibException: Could not find XOR key
     """
 
     arch = 'arm'
