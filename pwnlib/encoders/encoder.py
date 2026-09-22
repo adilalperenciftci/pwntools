@@ -157,7 +157,7 @@ def printable(raw_bytes, *a, **kw):
     Example:
 
         >>> context.clear(arch='i386')
-        >>> encoded = printable(b'\x00\x00\x00\x00')
+        >>> encoded = printable(b'\\x00\\x00\\x00\\x00')
         >>> all(0x21 <= byte <= 0x7e for byte in encoded)
         True
     """
