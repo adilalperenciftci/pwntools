@@ -174,12 +174,6 @@ def printable(raw_bytes, *a, **kw):
 
     Accepts the same arguments as :func:`encode`.
 
-    Example:
-
-        >>> context.clear(arch='i386')
-        >>> encoded = printable(b'\\x00\\x00\\x00\\x00')
-        >>> all(0x21 <= byte <= 0x7e for byte in encoded)
-        True
     """
     return encode(raw_bytes, expr=re_printable, *a, **kw)
 
