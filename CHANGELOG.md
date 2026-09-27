@@ -75,7 +75,7 @@ The table below shows which release corresponds to each branch, and what date th
 
 ## 5.0.0 (`dev`)
 
-- [#2780][2780] fix(encoders): register the i386 ASCII encoder and handle unavailable XOR encodings
+- [#2780][2780] fix(encoders): handle unavailable xor encodings and fallback
 - [#2762][2762] fix(srop): correct amd64 SigreturnFrame `uc_sigmask` offset
 - [#2753][2753] docs(args): clarify reserved args (DEBUG/NOASLR) map to context, not args
 - [#2740][2740] setup: install docs to FHS-compliant share/doc/pwntools
