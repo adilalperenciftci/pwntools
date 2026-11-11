@@ -1,0 +1,139 @@
+name: Corefile parser diagnostic
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: Ref to inspect
+        required: true
+        default: feat/encoder-interface-unification
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      libcdb-cache:
+        image: nginx
+        volumes:
+          - /home/runner/libcdb-cache:/var/cache/nginx
+        ports:
+          - 3000:3000
+          - 3001:3001
+          - 3002:3002
+          - 3003:3003
+          - 3004:3004
+    env:
+      DEBUGINFOD_URLS: "http://localhost:3000/ http://localhost:3004/"
+      PWN_LIBCRIP_URL: http://localhost:3001/
+      PWN_UBUNTU_ARCHIVE_URL: http://localhost:3002/
+      PWN_GITLAB_LIBCDB_URL: http://localhost:3003/
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.target_ref || github.head_ref }}
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.15'
+
+      - name: Install runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ash bash-static dash ksh mksh zsh \
+            gdb gdbserver socat \
+            binutils-multiarch qemu-user-static \
+            binutils-aarch64-linux-gnu \
+            binutils-arm-linux-gnueabihf \
+            binutils-mips-linux-gnu \
+            binutils-mipsel-linux-gnu \
+            binutils-msp430 \
+            binutils-powerpc-linux-gnu \
+            binutils-s390x-linux-gnu \
+            binutils-sparc64-linux-gnu \
+            binutils-riscv64-linux-gnu \
+            binutils-loongarch64-linux-gnu \
+            gcc-multilib libc6-dbg elfutils patchelf python3-pip
+          /usr/bin/python -m pip install --break-system-packages rpyc || /usr/bin/python -m pip install rpyc
+          python -m pip install --upgrade pip wheel
+          python -m pip install --editable .
+          python -m pip install -r docs/requirements.txt
+          travis/ssh_setup.sh
+
+      - name: Enable local process inspection
+        run: echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope
+
+      - name: Expose silent stack parsing failures
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('pwnlib/elf/corefile.py')
+          source = path.read_text()
+          old = (
+              "                except ValueError:\n"
+              "                    # If there are no environment variables, we die by running\n"
+              "                    # off the end of the stack.\n"
+              "                    pass\n"
+          )
+          new = (
+              "                except ValueError:\n"
+              "                    # Diagnostic branch: report the exact passive parser boundary.\n"
+              "                    import traceback\n"
+              "                    traceback.print_exc()\n"
+          )
+          if old not in source:
+              raise SystemExit('stack parser exception boundary not found')
+          path.write_text(source.replace(old, new, 1))
+          PY
+
+      - name: Run corefile documentation checks
+        shell: bash
+        env:
+          PWNLIB_NOTERM: '1'
+          GITHUB_HEAD_REF: feat/encoder-interface-unification
+          GITHUB_BASE_REF: dev
+        run: |
+          unset LD_LIBRARY_PATH
+          python -bb -m coverage run -m sphinx -b doctest docs/source docs/build/doctest docs/source/elf/corefile.rst
+
+      - name: Sweep environment alignment
+        if: always()
+        shell: bash
+        env:
+          PWNLIB_NOTERM: '1'
+        run: |
+          unset LD_LIBRARY_PATH
+          python -bb - <<'PY'
+          import os
+
+          from pwn import ELF, context, process, which
+
+          elf = ELF(which('bash-static'), checksec=False)
+          context.clear(binary=elf, log_level='error')
+          failed_counts = []
+
+          for count in range(64):
+              env = dict(os.environ)
+              for index in range(count):
+                  env[f'CORE_PARSE_PAD_{index}'] = 'x'
+              env['HELLO'] = 'WORLD'
+              io = process(elf.path, env=env)
+              io.sendline(b'echo ready')
+              io.recvline()
+              core = io.corefile
+              io.close()
+
+              if core.argc != 1 or len(core.argv) != 1 or 'HELLO' not in core.env:
+                  failed_counts.append(count)
+
+              try:
+                  os.unlink(core.path)
+              except OSError:
+                  pass
+
+          print(f'failed added-variable counts: {failed_counts}')
+          PY
